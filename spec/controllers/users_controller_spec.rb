@@ -52,7 +52,43 @@ describe UsersController do
 	response.should have_selector("a", :href => "/users?page=2",
 					   :content => "Next")	
       end
+
+      it "should not show delete links" do
+	get :index
+	@users[0..2].each do |user|
+	  response.should_not have_selector("a", :href => user_path(user),
+						 :content => "delete")
+	end
+      end
     end 
+
+    describe "for admin users" do 
+
+      before :each do
+        @user = test_sign_in(Factory(:user, :admin => true))
+        second = Factory(:user, :email => "another@example.com")
+        third  = Factory(:user, :email => "another@example.net")
+
+        @users = [@user, second, third]
+        30.times do
+          @users << Factory(:user, :email => Factory.next(:email))
+        end
+      end
+
+      it "should show delete links" do
+	get :index
+	@users[1..2].each do |user| 
+	  response.should have_selector("a", :href => user_path(user),
+					     :content => "delete")
+        end
+      end
+
+      it "should not show delete link for self" do
+	get :index
+	response.should_not have_selector("a", :href => user_path(@user),
+					       :content => "delete")
+      end  
+    end
   end
 
   describe "Get 'show'" do
@@ -121,6 +157,14 @@ describe UsersController do
 				     [type='password']")
     end
 
+    describe "for signed-in user" do
+      it "should redirect to root path" do
+        @user = Factory(:user)
+	test_sign_in(@user)
+	get :new
+	response.should redirect_to(root_path)	 
+      end
+    end
   end
 
 
@@ -177,6 +221,15 @@ describe UsersController do
       it "should have a welcome message" do
         post :create, :user => @attr
         flash[:success].should =~ /welcome to the sample app/i
+      end
+    end
+ 
+    describe "for signed-in user" do
+      it "should redirect to root path" do
+        @user = Factory(:user)
+        test_sign_in(@user)
+        post :create, :user => @attr 
+        response.should redirect_to(root_path)
       end
     end
   end
@@ -319,18 +372,25 @@ describe UsersController do
     describe "as an admin user" do
 
       before :each do
-        admin = Factory(:user, :email => "admin@example.com", :admin => true)
-        test_sign_in(admin)
+        @admin = Factory(:user, :email => "admin@example.com", :admin => true)
+        test_sign_in(@admin)
       end
 
       it "should destroy the user" do
 	lambda do
-	  delete :destroy, :id => @user
+	  delete :destroy, :id => @user 
 	end.should change(User, :count).by(-1)
       end
 
       it "should redirect to the users page" do
 	delete :destroy, :id => @user
+	response.should redirect_to(users_path)
+      end
+
+      it "should not allow the user to destroy themself" do
+	lambda do
+	  delete :destroy, :id => @admin 
+	end.should_not change(User, :count)
 	response.should redirect_to(users_path)
       end
     end
